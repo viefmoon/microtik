@@ -70,56 +70,56 @@
 
 ---
 
-## SECCIÓN 3: CREAR RED DE CLIENTES
+## SECCIÓN 3: PREPARAR RED DE CLIENTES
 
 ```bash
-# 3.1 Crear VLAN 20
-/interface vlan add interface=bridge name=vlan20-clientes vlan-id=20 comment="Red WiFi Clientes"
-
-# 3.2 IP para VLAN
-/ip address add address=192.168.20.1/24 interface=vlan20-clientes comment="Gateway Clientes"
-
-# 3.3 Pool DHCP
+# 3.1 Pool DHCP para clientes
 /ip pool add name=pool-clientes ranges=192.168.20.100-192.168.20.250
 
-# 3.4 Servidor DHCP
-/ip dhcp-server add name=dhcp-clientes interface=vlan20-clientes address-pool=pool-clientes lease-time=2h
-
-# 3.5 Red DHCP
+# 3.2 Red DHCP (se usará más adelante)
 /ip dhcp-server network add address=192.168.20.0/24 gateway=192.168.20.1 dns-server=8.8.8.8,8.8.4.4
 ```
 
 ---
 
-## SECCIÓN 4: CREAR WiFi PARA CLIENTES (SIMPLIFICADO)
+## SECCIÓN 4: CREAR BRIDGE Y WiFi PARA CLIENTES
 
 ```bash
-# 4.1 WiFi clientes 2.4GHz SIN VLAN (por ahora)
+# 4.1 Crear bridge separado para clientes
+/interface bridge add name=bridge-clientes comment="Bridge para red de clientes"
+
+# 4.2 WiFi clientes 2.4GHz en bridge-clientes
 /interface wifi add \
     name=wifi-clientes-2g \
     master-interface=wifi2 \
     configuration.ssid="LaLena-WiFi" \
     security.authentication-types=wpa2-psk \
     security.passphrase="lalena2025" \
-    datapath.bridge=bridge \
+    datapath.bridge=bridge-clientes \
     disabled=no
 
-# 4.2 WiFi clientes 5GHz SIN VLAN (por ahora)
+# 4.3 WiFi clientes 5GHz en bridge-clientes
 /interface wifi add \
     name=wifi-clientes-5g \
     master-interface=wifi1 \
     configuration.ssid="LaLena-WiFi" \
     security.authentication-types=wpa2-psk \
     security.passphrase="lalena2025" \
-    datapath.bridge=bridge \
+    datapath.bridge=bridge-clientes \
     disabled=no
 
-# 4.3 Reiniciar todas las WiFi
+# 4.4 Configurar IP en bridge-clientes
+/ip address add address=192.168.20.1/24 interface=bridge-clientes comment="Gateway Clientes"
+
+# 4.5 Servidor DHCP para clientes
+/ip dhcp-server add name=dhcp-clientes interface=bridge-clientes address-pool=pool-clientes lease-time=2h
+
+# 4.6 Reiniciar todas las WiFi
 /interface wifi disable [find]
 /delay 2
 /interface wifi enable [find]
 
-# 4.4 Verificar (deben ser 4 WiFi activas)
+# 4.7 Verificar (deben ser 4 WiFi activas)
 /interface wifi print
 ```
 
@@ -128,8 +128,8 @@
 ## SECCIÓN 5: CONFIGURAR NAT
 
 ```bash
-# 5.1 Agregar VLAN a lista LAN
-/interface list member add list=LAN interface=vlan20-clientes
+# 5.1 Agregar bridge-clientes a lista LAN
+/interface list member add list=LAN interface=bridge-clientes
 
 # 5.2 NAT para clientes
 /ip firewall nat add \
@@ -140,40 +140,32 @@
     place-before=0 \
     comment="NAT Clientes"
 
-# 5.3 Verificar orden
+# 5.3 Verificar orden (NAT Clientes debe estar antes que el NAT general)
 /ip firewall nat print
 ```
 
 ---
 
-## SECCIÓN 6: SEPARAR REDES (MÉTODO ALTERNATIVO)
-
-Como no usamos VLAN filtering, separamos las redes de otra forma:
+## SECCIÓN 6: VERIFICAR CONFIGURACIÓN
 
 ```bash
-# 6.1 Mover WiFi clientes a bridge separado
-/interface bridge add name=bridge-clientes
+# 6.1 Verificar que bridge-clientes existe
+/interface bridge print
 
-# 6.2 Cambiar WiFi clientes al nuevo bridge
-/interface wifi set wifi-clientes-2g datapath.bridge=bridge-clientes
-/interface wifi set wifi-clientes-5g datapath.bridge=bridge-clientes
+# 6.2 Verificar que las WiFi están en el bridge correcto
+/interface wifi print detail
 
-# 6.3 Mover VLAN al nuevo bridge
-/interface vlan set vlan20-clientes interface=bridge-clientes
+# 6.3 Verificar IPs configuradas
+/ip address print
 
-# 6.4 Configurar IP en el nuevo bridge
-/ip address add address=192.168.20.1/24 interface=bridge-clientes
+# 6.4 Verificar DHCP activo
+/ip dhcp-server print
 
-# 6.5 Ajustar DHCP
-/ip dhcp-server set dhcp-clientes interface=bridge-clientes
+# 6.5 Verificar que bridge-clientes está en lista LAN
+/interface list member print where list=LAN
 
-# 6.6 Agregar nuevo bridge a lista LAN
-/interface list member add list=LAN interface=bridge-clientes
-
-# 6.7 Reiniciar WiFi
-/interface wifi disable wifi-clientes-2g,wifi-clientes-5g
-/delay 2
-/interface wifi enable wifi-clientes-2g,wifi-clientes-5g
+# 6.6 Probar conectividad desde router
+/ping 8.8.8.8 count=3 interface=bridge-clientes
 ```
 
 ---
@@ -207,7 +199,7 @@ Como no usamos VLAN filtering, separamos las redes de otra forma:
 /ip pool set [find name=default-dhcp] ranges=192.168.88.20-192.168.88.254
 
 # 8.2 DNS
-/ip dns set servers=8.8.8.8,8.8.4.4
+/ip dns set servers=8.8.8.8,8.8.4.4 allow-remote-requests=yes
 
 # 8.3 QoS para clientes
 /queue simple add name=limite-clientes target=bridge-clientes max-limit=100M/100M comment="100Mbps clientes"
@@ -290,11 +282,12 @@ Como no usamos VLAN filtering, separamos las redes de otra forma:
 
 ## 🔴 CAMBIOS CLAVE vs VERSIÓN CON RESTRICCIÓN
 
-1. **REMOVIDO bloqueo de firewall para WiFi Admin**
+1. **SIN VLAN** - Usa bridges separados para mejor compatibilidad
 2. **Ambas redes tienen acceso completo a internet**
 3. **Mantiene separación entre redes** (clientes no ven red interna)
 4. **Conserva límite de velocidad** para red de clientes
 5. **Conserva horarios** para WiFi de clientes
+6. **Bridge dedicado** para red de clientes (bridge-clientes)
 
 ---
 
@@ -303,22 +296,42 @@ Como no usamos VLAN filtering, separamos las redes de otra forma:
 ### WiFi no aparece o está "INACTIVE":
 ```bash
 # Forzar reinicio específico
-/interface wifi disable wifi1,wifi2
+/interface wifi disable wifi1,wifi2,wifi-clientes-2g,wifi-clientes-5g
 /delay 2
-/interface wifi enable wifi1,wifi2
+/interface wifi enable wifi1,wifi2,wifi-clientes-2g,wifi-clientes-5g
 
 # Verificar datapath
 /interface wifi set wifi1 datapath.bridge=bridge
 /interface wifi set wifi2 datapath.bridge=bridge
+/interface wifi set wifi-clientes-2g datapath.bridge=bridge-clientes
+/interface wifi set wifi-clientes-5g datapath.bridge=bridge-clientes
 ```
 
-### No obtiene IP:
+### No obtiene IP en red de clientes:
 ```bash
 # Verificar que bridge está correcto
-/interface wifi print detail
+/interface wifi print detail where name~"clientes"
+
+# Verificar DHCP server activo
+/ip dhcp-server print
 
 # Ver logs DHCP
 /log print where topics~"dhcp"
+
+# Verificar que el bridge tiene IP
+/ip address print where interface=bridge-clientes
+```
+
+### No hay internet en red de clientes:
+```bash
+# Verificar NAT
+/ip firewall nat print
+
+# Verificar que bridge-clientes está en lista LAN
+/interface list member print where list=LAN
+
+# Probar ping desde el router
+/ping 8.8.8.8 interface=bridge-clientes count=3
 ```
 
 ### Si necesitas resetear:
