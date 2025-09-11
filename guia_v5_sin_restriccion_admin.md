@@ -1,7 +1,7 @@
-# GUÍA DEFINITIVA v5 - MIKROTIK LA LEÑA (SIN RESTRICCIÓN ADMIN)
-## Configuración Completa - Ambas Redes con Internet
+# GUÍA DEFINITIVA v5 - MIKROTIK LA LEÑA (CON RESTRICCIÓN WIFI ADMIN)
+## Configuración Completa - Internet Selectivo
 ### RouterOS 7.19.4 - hAP ax³
-### ✅ Versión: WiFi Admin CON internet, WiFi Clientes CON internet
+### ✅ Versión: Ethernet CON internet, WiFi Admin SIN internet, WiFi Clientes CON internet
 
 ---
 
@@ -10,7 +10,7 @@
 | Conexión | Red | SSID | Internet | Uso |
 |----------|-----|------|----------|-----|
 | **ETHERNET (todos)** | 192.168.88.0/24 | - | ✅ SÍ | Servidor + PCs |
-| **WiFi INTERNO** | 192.168.88.0/24 | LaLena-Admin | ✅ SÍ | Tablets |
+| **WiFi INTERNO** | 192.168.88.0/24 | LaLena-Admin | ❌ NO | Tablets (solo local) |
 | **WiFi CLIENTES** | 192.168.20.0/24 | LaLena-WiFi | ✅ SÍ | Público |
 
 ---
@@ -170,10 +170,28 @@
 
 ---
 
-## SECCIÓN 7: AISLAR REDES (OPCIONAL - SOLO SEPARACIÓN)
+## SECCIÓN 7: BLOQUEAR INTERNET AL WIFI ADMIN
 
 ```bash
-# 7.1 Clientes no acceden a red interna
+# 7.1 Bloquear WiFi Admin 5GHz a Internet
+/ip firewall filter add \
+    chain=forward \
+    in-interface=wifi1 \
+    out-interface-list=WAN \
+    action=drop \
+    comment="Bloquear WiFi Admin 5GHz a Internet" \
+    place-before=0
+
+# 7.2 Bloquear WiFi Admin 2.4GHz a Internet  
+/ip firewall filter add \
+    chain=forward \
+    in-interface=wifi2 \
+    out-interface-list=WAN \
+    action=drop \
+    comment="Bloquear WiFi Admin 2.4GHz a Internet" \
+    place-before=0
+
+# 7.3 OPCIONAL: Aislar red de clientes de red interna
 /ip firewall filter add \
     chain=forward \
     in-interface=bridge-clientes \
@@ -181,13 +199,16 @@
     action=drop \
     comment="Aislar clientes de interna"
 
-# 7.2 Red interna no accede a clientes
+# 7.4 OPCIONAL: Aislar red interna de clientes
 /ip firewall filter add \
     chain=forward \
     in-interface=bridge \
     out-interface=bridge-clientes \
     action=drop \
     comment="Aislar interna de clientes"
+
+# 7.5 Verificar reglas de firewall
+/ip firewall filter print
 ```
 
 ---
@@ -297,7 +318,7 @@
 
 ### 2. TABLET EN "LaLena-Admin":
 - ✅ IP: 192.168.88.x
-- ✅ Internet: SÍ
+- ❌ Internet: NO
 - ✅ Ve servidor local
 
 ### 3. CELULAR EN "LaLena-WiFi":
@@ -307,14 +328,14 @@
 
 ---
 
-## 🔴 CAMBIOS CLAVE vs VERSIÓN CON RESTRICCIÓN
+## 🔴 CONFIGURACIÓN CLAVE
 
 1. **SIN VLAN** - Usa bridges separados para mejor compatibilidad
-2. **Ambas redes tienen acceso completo a internet**
-3. **Mantiene separación entre redes** (clientes no ven red interna)
-4. **Conserva límite de velocidad** para red de clientes
-5. **Conserva horarios** para WiFi de clientes
-6. **Bridge dedicado** para red de clientes (bridge-clientes)
+2. **WiFi Admin SIN internet** - Solo acceso a red local
+3. **Ethernet SIEMPRE con internet** - Todos los puertos ethernet funcionan
+4. **WiFi Clientes CON internet** - Limitado a 100Mbps
+5. **Separación entre redes** - Clientes no ven red interna
+6. **Horarios configurables** - WiFi clientes 2:00 PM a 11:30 PM
 
 ---
 
@@ -361,6 +382,23 @@
 /ping 8.8.8.8 interface=bridge-clientes count=3
 ```
 
+### WiFi Admin tiene internet (no debería):
+```bash
+# Verificar que las reglas de bloqueo están activas
+/ip firewall filter print where comment~"Bloquear WiFi Admin"
+
+# Si no existen, ejecutar Sección 7 nuevamente
+```
+
+### Ethernet no tiene internet:
+```bash
+# Verificar que NO hay reglas bloqueando ethernet
+/ip firewall filter print
+
+# Si hay reglas incorrectas, eliminarlas
+/ip firewall filter remove [find comment~"ethernet"]
+```
+
 ### Si necesitas resetear:
 ```bash
 /system reset-configuration no-defaults=no
@@ -373,12 +411,12 @@
 Esta configuración garantiza:
 - ✅ WiFi SIEMPRE activo (sin VLAN filtering)
 - ✅ Ethernet con internet
-- ✅ WiFi Admin CON internet
-- ✅ WiFi Clientes con internet
+- ❌ WiFi Admin SIN internet (solo red local)
+- ✅ WiFi Clientes con internet (100Mbps)
 - ✅ Redes separadas por bridges
 - ✅ Horarios configurables para red de clientes
 
-**Versión:** 5.0 SIN RESTRICCIÓN ADMIN
+**Versión:** 5.0 CON RESTRICCIÓN WIFI ADMIN
 **Fecha:** Enero 2025
 **Router:** MikroTik hAP ax³
-**Diferencia principal:** WiFi Admin tiene acceso completo a internet
+**Diferencia principal:** WiFi Admin bloqueado a internet, Ethernet siempre funciona
