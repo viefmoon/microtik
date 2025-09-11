@@ -201,10 +201,13 @@
 # 8.2 DNS
 /ip dns set servers=8.8.8.8,8.8.4.4 allow-remote-requests=yes
 
-# 8.3 QoS para clientes
-/queue simple add name=limite-clientes target=bridge-clientes max-limit=100M/100M comment="100Mbps clientes"
+# 8.3 IMPORTANTE: Deshabilitar fasttrack para que funcione el límite
+/ip firewall filter disable [find where action=fasttrack-connection]
 
-# 8.4 Horarios WiFi clientes (2:00 PM a 11:30 PM)
+# 8.4 QoS para clientes (límite de velocidad)
+/queue simple add name=limite-clientes target=192.168.20.0/24 max-limit=100M/100M comment="100Mbps clientes"
+
+# 8.5 Horarios WiFi clientes (2:00 PM a 11:30 PM)
 /system scheduler add \
     name=wifi-on \
     start-time=14:00:00 \
