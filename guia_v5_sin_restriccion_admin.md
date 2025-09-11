@@ -225,13 +225,37 @@
 
 ---
 
-## SECCIÓN 9: GUARDAR CONFIGURACIÓN
+## SECCIÓN 9: ASIGNAR IPs FIJAS (OPCIONAL)
 
 ```bash
-# 9.1 Backup
+# 9.1 Ver dispositivos conectados
+/ip dhcp-server lease print
+
+# 9.2 Asignar IP fija a computadora Leo
+/ip dhcp-server lease add address=192.168.88.191 mac-address=E0:51:D8:1A:43:68 server=defconf comment="Leo - IP Fija"
+
+# 9.3 Hacer el lease estático (permanente)
+/ip dhcp-server lease make-static [find mac-address=E0:51:D8:1A:43:68]
+
+# 9.4 IMPORTANTE: Reiniciar el dispositivo
+# Después de asignar la IP fija, REINICIA la computadora/dispositivo
+# para que tome la nueva IP correctamente
+
+# 9.5 Ejemplo para agregar más IPs fijas
+# /ip dhcp-server lease add address=192.168.88.10 mac-address=AA:BB:CC:DD:EE:FF server=defconf comment="Servidor"
+# /ip dhcp-server lease make-static [find mac-address=AA:BB:CC:DD:EE:FF]
+# Reiniciar el dispositivo
+```
+
+---
+
+## SECCIÓN 10: GUARDAR CONFIGURACIÓN
+
+```bash
+# 10.1 Backup
 /system backup save name=lalena-sin-restriccion
 
-# 9.2 Exportar
+# 10.2 Exportar
 /export file=lalena-sin-restriccion
 ```
 
