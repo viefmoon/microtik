@@ -1,7 +1,7 @@
-# GUÍA DEFINITIVA v5 FINAL - MIKROTIK LA LEÑA
-## Configuración Completa Con Firewall Corregido
+# GUÍA DEFINITIVA v5 - MIKROTIK LA LEÑA (SIN RESTRICCIÓN ADMIN)
+## Configuración Completa - Ambas Redes con Internet
 ### RouterOS 7.19.4 - hAP ax³
-### ⚠️ Versión corregida: WiFi Admin sin internet, WiFi Clientes con internet
+### ✅ Versión: WiFi Admin CON internet, WiFi Clientes CON internet
 
 ---
 
@@ -10,7 +10,7 @@
 | Conexión | Red | SSID | Internet | Uso |
 |----------|-----|------|----------|-----|
 | **ETHERNET (todos)** | 192.168.88.0/24 | - | ✅ SÍ | Servidor + PCs |
-| **WiFi INTERNO** | 192.168.88.0/24 | LaLena-Admin | ❌ NO | Tablets |
+| **WiFi INTERNO** | 192.168.88.0/24 | LaLena-Admin | ✅ SÍ | Tablets |
 | **WiFi CLIENTES** | 192.168.20.0/24 | LaLena-WiFi | ✅ SÍ | Público |
 
 ---
@@ -146,71 +146,31 @@
 
 ---
 
-## SECCIÓN 6: FIREWALL - BLOQUEAR SOLO WiFi ADMIN (NO CLIENTES)
-
-```bash
-# 6.1 IMPORTANTE: No bloqueamos por interfaz maestra porque afecta a clientes
-# En su lugar, bloqueamos por subnet pero permitiendo ethernet
-
-# 6.2 Crear lista para dispositivos ethernet
-/interface list add name=ETHERNET-PORTS comment="Puertos ethernet con internet"
-
-# 6.3 Agregar puertos ethernet a la lista
-/interface list member add list=ETHERNET-PORTS interface=ether2
-/interface list member add list=ETHERNET-PORTS interface=ether3
-/interface list member add list=ETHERNET-PORTS interface=ether4
-/interface list member add list=ETHERNET-PORTS interface=ether5
-
-# 6.4 Permitir ethernet a internet (agregar PRIMERO)
-/ip firewall filter add \
-    chain=forward \
-    in-interface-list=ETHERNET-PORTS \
-    out-interface-list=WAN \
-    action=accept \
-    place-before=[find comment="defconf: drop all from WAN not DSTNATed"] \
-    comment="Permitir ethernet a Internet"
-
-# 6.5 Bloquear red .88 (WiFi Admin) pero NO ethernet
-/ip firewall filter add \
-    chain=forward \
-    src-address=192.168.88.0/24 \
-    in-interface-list=!ETHERNET-PORTS \
-    out-interface-list=WAN \
-    action=drop \
-    place-before=[find comment="defconf: drop all from WAN not DSTNATed"] \
-    comment="Bloquear WiFi Admin a Internet"
-
-# 6.6 Verificar orden (ethernet permitido debe estar ANTES que bloqueo)
-/ip firewall filter print
-```
-
----
-
-## SECCIÓN 7: SEPARAR REDES (MÉTODO ALTERNATIVO)
+## SECCIÓN 6: SEPARAR REDES (MÉTODO ALTERNATIVO)
 
 Como no usamos VLAN filtering, separamos las redes de otra forma:
 
 ```bash
-# 7.1 Mover WiFi clientes a bridge separado
+# 6.1 Mover WiFi clientes a bridge separado
 /interface bridge add name=bridge-clientes
 
-# 7.2 Cambiar WiFi clientes al nuevo bridge
+# 6.2 Cambiar WiFi clientes al nuevo bridge
 /interface wifi set wifi-clientes-2g datapath.bridge=bridge-clientes
 /interface wifi set wifi-clientes-5g datapath.bridge=bridge-clientes
 
-# 7.3 Mover VLAN al nuevo bridge
+# 6.3 Mover VLAN al nuevo bridge
 /interface vlan set vlan20-clientes interface=bridge-clientes
 
-# 7.4 Configurar IP en el nuevo bridge
+# 6.4 Configurar IP en el nuevo bridge
 /ip address add address=192.168.20.1/24 interface=bridge-clientes
 
-# 7.5 Ajustar DHCP
+# 6.5 Ajustar DHCP
 /ip dhcp-server set dhcp-clientes interface=bridge-clientes
 
-# 7.6 Agregar nuevo bridge a lista LAN
+# 6.6 Agregar nuevo bridge a lista LAN
 /interface list member add list=LAN interface=bridge-clientes
 
-# 7.7 Reiniciar WiFi
+# 6.7 Reiniciar WiFi
 /interface wifi disable wifi-clientes-2g,wifi-clientes-5g
 /delay 2
 /interface wifi enable wifi-clientes-2g,wifi-clientes-5g
@@ -218,10 +178,10 @@ Como no usamos VLAN filtering, separamos las redes de otra forma:
 
 ---
 
-## SECCIÓN 8: AISLAR REDES
+## SECCIÓN 7: AISLAR REDES (OPCIONAL - SOLO SEPARACIÓN)
 
 ```bash
-# 8.1 Clientes no acceden a red interna
+# 7.1 Clientes no acceden a red interna
 /ip firewall filter add \
     chain=forward \
     in-interface=bridge-clientes \
@@ -229,7 +189,7 @@ Como no usamos VLAN filtering, separamos las redes de otra forma:
     action=drop \
     comment="Aislar clientes de interna"
 
-# 8.2 Red interna no accede a clientes
+# 7.2 Red interna no accede a clientes
 /ip firewall filter add \
     chain=forward \
     in-interface=bridge \
@@ -240,19 +200,19 @@ Como no usamos VLAN filtering, separamos las redes de otra forma:
 
 ---
 
-## SECCIÓN 9: CONFIGURACIONES ADICIONALES
+## SECCIÓN 8: CONFIGURACIONES ADICIONALES
 
 ```bash
-# 9.1 Ajustar pool DHCP interno
+# 8.1 Ajustar pool DHCP interno
 /ip pool set [find name=default-dhcp] ranges=192.168.88.20-192.168.88.254
 
-# 9.2 DNS
+# 8.2 DNS
 /ip dns set servers=8.8.8.8,8.8.4.4
 
-# 9.3 QoS para clientes
+# 8.3 QoS para clientes
 /queue simple add name=limite-clientes target=bridge-clientes max-limit=100M/100M comment="100Mbps clientes"
 
-# 9.4 Horarios WiFi clientes (2:00 PM a 11:30 PM)
+# 8.4 Horarios WiFi clientes (2:00 PM a 11:30 PM)
 /system scheduler add \
     name=wifi-on \
     start-time=14:00:00 \
@@ -270,14 +230,14 @@ Como no usamos VLAN filtering, separamos las redes de otra forma:
 
 ---
 
-## SECCIÓN 10: GUARDAR CONFIGURACIÓN
+## SECCIÓN 9: GUARDAR CONFIGURACIÓN
 
 ```bash
-# 10.1 Backup
-/system backup save name=lalena-final
+# 9.1 Backup
+/system backup save name=lalena-sin-restriccion
 
-# 10.2 Exportar
-/export file=lalena-final
+# 9.2 Exportar
+/export file=lalena-sin-restriccion
 ```
 
 ---
@@ -318,7 +278,7 @@ Como no usamos VLAN filtering, separamos las redes de otra forma:
 
 ### 2. TABLET EN "LaLena-Admin":
 - ✅ IP: 192.168.88.x
-- ❌ Internet: NO (bloqueado por firewall)
+- ✅ Internet: SÍ
 - ✅ Ve servidor local
 
 ### 3. CELULAR EN "LaLena-WiFi":
@@ -328,14 +288,13 @@ Como no usamos VLAN filtering, separamos las redes de otra forma:
 
 ---
 
-## 🔴 CAMBIOS CLAVE vs VERSIONES ANTERIORES
+## 🔴 CAMBIOS CLAVE vs VERSIÓN CON RESTRICCIÓN
 
-1. **NO usamos VLAN filtering** (causaba WiFi inactive)
-2. **Configuramos datapath.bridge ANTES** de cambiar SSID
-3. **Reiniciamos WiFi después de cada cambio**
-4. **Usamos bridge separado** para clientes (más simple)
-5. **Bloqueamos por subnet + lista de ethernet** (no por interfaz WiFi maestra)
-6. **Límite de velocidad 100Mbps** para red de clientes
+1. **REMOVIDO bloqueo de firewall para WiFi Admin**
+2. **Ambas redes tienen acceso completo a internet**
+3. **Mantiene separación entre redes** (clientes no ven red interna)
+4. **Conserva límite de velocidad** para red de clientes
+5. **Conserva horarios** para WiFi de clientes
 
 ---
 
@@ -371,17 +330,15 @@ Como no usamos VLAN filtering, separamos las redes de otra forma:
 
 ## 📊 RESUMEN
 
-Esta configuración CORREGIDA garantiza:
+Esta configuración garantiza:
 - ✅ WiFi SIEMPRE activo (sin VLAN filtering)
 - ✅ Ethernet con internet
-- ✅ WiFi interno sin internet
-- ✅ WiFi clientes con internet
+- ✅ WiFi Admin CON internet
+- ✅ WiFi Clientes con internet
 - ✅ Redes separadas por bridges
+- ✅ Horarios configurables para red de clientes
 
-**Versión:** 5.0 FINAL - FIREWALL CORREGIDO
+**Versión:** 5.0 SIN RESTRICCIÓN ADMIN
 **Fecha:** Enero 2025
 **Router:** MikroTik hAP ax³
-**Problemas resueltos:** 
-- WiFi inactive por VLAN filtering
-- Firewall bloqueando WiFi clientes incorrectamente
-- Ahora: Ethernet con internet, WiFi Admin sin internet, WiFi Clientes con internet (100Mbps)
+**Diferencia principal:** WiFi Admin tiene acceso completo a internet
